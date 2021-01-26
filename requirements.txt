@@ -1,0 +1,9 @@
+requests~=2.25.1
+baostock~=0.8.8
+bs4~=0.0.1
+beautifulsoup4~=4.9.3
+chardet~=4.0.0
+html2text~=2020.1.16
+goose3~=3.1.6
+prettytable~=2.0.0
+newspaper3k

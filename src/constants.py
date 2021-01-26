@@ -1,0 +1,7 @@
+FUND_DATA_URL = "http://fund.eastmoney.com/pingzhongdata/{}.js"
+STOCK_DATA_URL = "http://fund.eastmoney.com/{}.html"
+GOOGLE_LANGUAGE_API = "https://language.googleapis.com/v1/documents:{}?key={}"
+DATA_FILE = "../data/data.txt"
+REQUEST_FILE = "../data/request.json"
+LOG_FILE = "../logs/fund-assistant.log"
+ARTICLES_LOG_FILE = "../logs/articles.log.json"
