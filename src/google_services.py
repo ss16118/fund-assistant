@@ -9,6 +9,7 @@ import requests
 
 from config import *
 from constants import *
+from logger import logger
 
 
 class GoogleClient:
@@ -19,7 +20,7 @@ class GoogleClient:
         self.key = os.environ["API_KEY"]
 
     def analyze_sentiment(self):
-        payload = open("../data/request.json", "rb")
+        payload = open(REQUEST_FILE, "rb")
         headers = {'content-type': 'application/json'}
         response = requests.post(GOOGLE_LANGUAGE_API.format("analyzeSentiment", self.key),
                                  data=payload, headers=headers)
@@ -29,6 +30,7 @@ class GoogleClient:
 class GoogleServices:
     def __init__(self):
         self.client = GoogleClient()
+        logger.log("Google services initialized successfully")
 
     def google_search(self, query, num_result):
         """

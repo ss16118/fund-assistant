@@ -8,4 +8,3 @@ y: Past year
 """
 TIME_PERIOD = "m"
 NUM_RESULTS = 10
-CONSOLE_OUTPUT = True

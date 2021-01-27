@@ -1,7 +1,6 @@
 import logging
 
-from config import CONSOLE_OUTPUT
-from utils import *
+from utils import read_json_file, dump_json_to_file
 
 from constants import LOG_FILE, ARTICLES_LOG_FILE
 
@@ -15,22 +14,22 @@ log_levels = dict(
 
 
 class InfoLogger:
-    def __init__(self, log_path, article_log_path, console_output):
-        self.console_output = console_output
+    def __init__(self, log_path, article_log_path):
         self.log_path = log_path
         self.article_log = article_log_path
         logging.basicConfig(format='[%(levelname)s] %(asctime)s: %(message)s',
                            datefmt='%m/%d/%Y %I:%M:%S %p',
                            level=logging.INFO,
                            handlers=[logging.FileHandler(filename=log_path, encoding='utf-8', mode='a+')])
+        self.log("Log loaded successfully from {}".format(LOG_FILE))
 
-    def log(self, message, level="info"):
+    def log(self, message, level="info", quiet=True):
         """
         Log the given message to the log file. If
-        console is set to True, also print in console.
+        quiet is set to False, also print in console.
         """
         log_levels[level](message)
-        if self.console_output:
+        if not quiet:
             print(message)
 
     def log_article(self, stock_name, search_result, content):
@@ -51,6 +50,7 @@ class InfoLogger:
             content=content
         )
         dump_json_to_file(data, self.article_log)
+        self.log("Saved content of article {} to article.log.json. ({})".format(title, stock_name))
 
     def search_article_content(self, url):
         """
@@ -62,8 +62,17 @@ class InfoLogger:
             for stock_name in data.keys():
                 if data[stock_name].get(url) is not None:
                     return data[stock_name].get(url).get("content")
-        except KeyError as exception:
+        except KeyError:
             return None
+
+    def get_all_content(self):
+        """
+        Return all the content in the log file as a list of strings.
+        Each element in the list represents one line in the file.
+        """
+        with open(self.log_path, "r", encoding="utf-8") as log_file:
+            content = log_file.readlines()
+            return [line.strip() for line in content if line.strip()]
 
     def clear_log(self):
         with open(self.log_path, "w"):
@@ -75,4 +84,4 @@ class InfoLogger:
         dump_json_to_file({}, self.article_log)
 
 
-logger = InfoLogger(LOG_FILE, ARTICLES_LOG_FILE, CONSOLE_OUTPUT)
+logger = InfoLogger(LOG_FILE, ARTICLES_LOG_FILE)
