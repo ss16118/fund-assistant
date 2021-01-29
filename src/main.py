@@ -1,5 +1,8 @@
+import cmd
 import os
 import traceback
+from datetime import datetime
+from functools import wraps
 
 from config import NUM_RESULTS
 from fund import Fund
@@ -13,8 +16,17 @@ except FileNotFoundError:
     exit()
 from cmd import Cmd
 
+shorthands = dict(
+    nav="net_asset_value",
+    cnv="cumulative_value",
+    dy="daily_yield"
+)
+
 
 class FundAssistant(Cmd):
+    """
+    Interactive shell
+    """
     prompt = "fund-assistant> "
     intro = "Welcome to FundAssistant!\nType '?' to see all available commands.\nType 'exit' to exit the program."
 
@@ -26,6 +38,23 @@ class FundAssistant(Cmd):
         self.analysis_statistics = None
         self.prediction_contribution = None
 
+    # ==================== Custom decorators ====================
+    def _requires_fund_obj(func):
+        @wraps(func)
+        def inner(self, *args, **kwargs):
+            if self.fund_obj is None:
+                logger.log("Fund has not been set yet. Use 'set <fund_code>' to specify the fund.", "warning", False)
+            else:
+                return func(self, *args, **kwargs)
+
+        return inner
+
+    def parseline(self, line):
+        logger.log("Executing command '{}'...".format(line))
+        ret = cmd.Cmd.parseline(self, line)
+        return ret
+
+    # ==================== Interactive commands ====================
     def do_set(self, fund_code):
         """Sets the fund to analyze to be the one specified by the parameter fund code.
 Usage: fund <fund_code>"""
@@ -46,14 +75,22 @@ Usage: fund <fund_code>"""
         except Exception as exception:
             logger.log(exception, "error", quiet=False)
 
+    @_requires_fund_obj
     def do_fund(self, arg):
         """Performs actions based on the argument given:
 > fund info      : prints all information on the current fund
 > fund code      : prints the fund code
 > fund name      : prints the name of the current fund
+> fund nav       : prints the net asset value of the fund in the past month
+> fund nav <int> : prints the net asset value of the fund of the past <int> months
+> fund cnv       : prints the cumulative net value of the fund in the past month
+> fund cnv <int> : prints the cumulative net value of the fund in the past <int> months
+> fund dy        : prints the daily yield of the fund in the past month
+> fund dy <int>  : prints the daily yield value of the fund in the past <int> months
 > fund stocks    : prints the stock positions of the current fund
 > fund yields    : prints the yields of the fund in 1 year, 6 months, 3 months and 1 month
-> fund prediction: prints the contribution of each stock to the overall prediction of the fund."""
+> fund prediction: prints the contribution of each stock to the overall prediction of the fund"""
+        args = arg.split()
 
         def print_fund_code():
             logger.log("code: {}".format(self.fund_obj.code), quiet=False)
@@ -80,6 +117,19 @@ Usage: fund <fund_code>"""
                 logger.log("You need to run 'predict all' command first to obtain the predictions of each stock",
                            "error", False)
 
+        def print_historical_data():
+            column_name = args[0]
+            months = 1
+            try:
+                if len(args) > 1:
+                    months = int(args[1])
+                data = self.fund_obj.get_historical_data([shorthands[column_name]], months)
+                logger.log(data.to_string(index=False), quiet=False)
+            except KeyError:
+                logger.log("Parameter {} not supported".format(column_name), "error", False)
+            except ValueError:
+                logger.log("The parameter following '{}' must be an integer".format(column_name), "error", False)
+
         def print_fund_info():
             print_fund_code()
             print_fund_name()
@@ -92,17 +142,51 @@ Usage: fund <fund_code>"""
             name=print_fund_name,
             stocks=print_stocks,
             yields=print_yields,
+            nav=print_historical_data,
+            cnv=print_historical_data,
+            dy=print_historical_data,
             prediction=print_prediction
         )
 
         try:
-            if self.fund_obj is None:
-                logger.log("Fund has not been set yet. Use 'set <fund_code>' to specify the fund.", "warning", False)
-            else:
-                logger.log("Executing command 'fund {}'...".format(arg))
-                actions[arg]()
+            command = args[0]
+            actions[command]()
         except KeyError:
             logger.log("Command 'fund {}' not supported".format(arg), "error", False)
+
+    @_requires_fund_obj
+    def do_plot(self, arg):
+        """Performs actions based on the argument given:
+> plot <options>      : plots the any combination of the three metrics nav, cnv, and dy for the current fund
+                        in the past month. Note that metrics must be separated with spaces.
+                        i.e. 'plot nav', 'plot nav cnv', 'plot nav cnv dy'
+> plot <options> <int>: performs the same plotting action as 'plot <options>'. The only difference is
+                        <int> specifies that data will be selected from the previous <int> months."""
+
+        possible_metrics = {"nav", "cnv", "dy"}
+        metrics_to_plot = []
+        input_args = arg.split()
+        months = 1
+        for i, metric in enumerate(input_args):
+            if i > 3:
+                logger.log("The number of arguments cannot be greater than 4", "error", False)
+                return
+            if metric.isdigit():
+                if i != len(input_args) - 1:  # if the integer argument is not the last argument
+                    logger.log("The integer must be the last argument", "error", False)
+                    return
+                months = int(metric)
+            else:
+                if metric not in possible_metrics:
+                    logger.log("Argument {} is not a possible metric to plot".format(metric), "error", False)
+                    return
+                else:
+                    metrics_to_plot.append(metric)
+
+        if len(metrics_to_plot) == 0:
+            logger.log("There has to be at least one metric", "error", False)
+        else:
+            graph_historical_data(self.fund_obj.get_historical_data(list(shorthands.values()), months), metrics_to_plot)
 
     def do_predict(self, arg):
         """Performs actions based on the argument given:
@@ -113,6 +197,7 @@ Usage: fund <fund_code>"""
             crawled_links=0,
             failed_links=[]
         )
+
         logger.log("Executing command 'predict {}'...".format(arg))
         if arg == "all":
             prediction = 0
@@ -131,7 +216,9 @@ Usage: fund <fund_code>"""
             self.fund_obj.overall_prediction = prediction / 100
             logger.log("Prediction for {} ({}): {:.5f}"
                        .format(self.fund_obj.data["name"], self.fund_obj.code, prediction / 100), quiet=False)
-            logger.log("Use 'fund prediction' to view the detailed contribution of each stock", quiet=False)
+            table = table_str(list(self.prediction_contribution.values()),
+                              ["Name", "Sentiment score", "Position Ratio", "Weighted Score"])
+            logger.log(table, quiet=False)
         else:
             # Only supports stocks held in the fund
             name = None
@@ -230,7 +317,6 @@ Usage: fund <fund_code>"""
             print=print_content
         )
         try:
-            logger.log("Executing command 'log {}'...".format(arg))
             actions[args[0]]()
         except KeyError:
             logger.log("Command 'log {}' not supported".format(arg), "error", False)
@@ -248,6 +334,8 @@ Usage: fund <fund_code>"""
     def do_EOF(self, _):
         return True
 
+    _requires_fund_obj = staticmethod(_requires_fund_obj)
+
 
 if __name__ == '__main__':
     try:
@@ -255,56 +343,3 @@ if __name__ == '__main__':
         FundAssistant().cmdloop()
     finally:
         logger.log("Exiting...", quiet=False)
-    """
-    fund = Fund(FUND_CODE)
-    logger.log("Retrieving stocks in fund: {} ({})...".format(fund.name, FUND_CODE))
-    stocks = fund.stocks
-    print_table(stocks, ["Code", "Name", "Ratio"])
-
-    google_service = GoogleServices()
-    converter = HTML2TextConverter()
-    debug = True
-    # https://company.stcn.com/gsdt/202101/t20210112_2724171.html
-    # https://finance.sina.com.cn/roll/2020-12-29/doc-iiznezxs9554428.shtml
-    if debug:
-        print(logger.search_article_content("https://finance.sina.com.cn/stock/hkstock/hkstocknews/2021-01-26/doc-ikftpnny2019534.shtml"))
-        # print(converter.extract_essential_text("https://finance.sina.com.cn/roll/2020-12-29/doc-iiznezxs9554428.shtml"))
-    prediction = 0
-
-    failed_urls = []
-
-    if not debug:
-        for stock in stocks:
-            clear_payload()
-            stock_name = stock["name"]
-            logger.log("Google search results on {}".format(stock_name))
-            results = google_service.google_search(stock_name, NUM_RESULTS)
-            for i, result in enumerate(results):
-                print("{}. {}: {}".format(i + 1, *result))
-                url = result[1]
-                title = result[0]
-                try:
-                    content_lines = converter.extract_essential_text(url)
-                    add_to_payload("".join(content_lines) + "\n")
-                    logger.log_article(stock_name, result, "\n".join(content_lines))
-                except Exception as exception:
-                    logger.log(exception, "error")
-                    failed_urls.append((url, exception))
-            try:
-                prepare_payload()
-                reply = google_service.analyze_text()
-                logger.log("Obtained sentiment analysis for information gathered on {}: (score: {}, magnitude: {})".
-                           format(stock_name, reply.get("documentSentiment").get("score"),
-                                  reply.get("documentSentiment").get("magnitude"))),
-                sentiment_score = reply.get("documentSentiment").get("score")
-                prediction += sentiment_score * stock["position_ratio"]
-            except Exception as exception:
-                logger.log("Failed to analyze sentiment for information gathered on {}: {}"
-                           .format(stock_name, exception), "error")
-
-        if len(failed_urls) > 0:
-            print("\nFailed to fetch the following urls:")
-            for url, exception in failed_urls:
-                print("{}: {}".format(url, exception))
-        print("Prediction for {} ({}): {}".format(fund.name, FUND_CODE, prediction / 100))
-    """

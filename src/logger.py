@@ -39,7 +39,6 @@ class InfoLogger:
         :param search_result: a tuple with the first element being the title of the
         title of the search result and second element being the url.
         :param content: the text content of the article
-        :return: NULL
         """
         title, url = search_result
         data = read_json_file(self.article_log)

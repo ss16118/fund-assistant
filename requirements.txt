@@ -7,3 +7,7 @@ html2text~=2020.1.16
 goose3~=3.1.6
 prettytable~=2.0.0
 newspaper3k
+numpy~=1.19.5
+pandas~=1.2.1
+matplotlib~=3.3.4
+python-dateutil~=2.8.1

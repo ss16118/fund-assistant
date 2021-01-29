@@ -4,6 +4,7 @@ import re
 import chardet
 from constants import *
 from prettytable import PrettyTable
+import matplotlib.pyplot as plt
 
 
 def get_page_encoding(request):
@@ -30,6 +31,35 @@ def get_complete_fund_code(code):
         return "sz.{}".format(code)
     else:
         return "sh.{}".format(code)
+
+
+def graph_historical_data(df, selected_columns):
+    date = df["date"]
+    nav = df["net_asset_value"]
+    cumulative_value = df["cumulative_value"]
+    daily_yield = df["daily_yield"]
+
+    # Plot net asset value
+    figure = plt.figure()
+    ax1 = figure.add_subplot(111)
+    if "nav" in selected_columns:
+        ax1.plot(date, nav, label="Net asset value")
+    if "cnv" in selected_columns:
+        ax1.plot(date, cumulative_value, label='Cumulative net asset value')
+    if "nav" in selected_columns or "cnv" in selected_columns:
+        ax1.set_ylabel("Net asset value")
+        ax1.set_xlabel("Date")
+        plt.legend(loc="upper left")
+
+    # Plot daily yield
+    if "dy" in selected_columns:
+        ax2 = ax1.twinx() if len(selected_columns) > 1 else ax1
+        ax2.plot(date, daily_yield, 'r', label="Daily yield")
+        ax2.set_ylabel("Daily yield")
+        plt.legend(loc='upper right')
+
+    plt.title('Net Asset Values of Fund')
+    plt.show()
 
 
 def table_str(data, column_names):
@@ -79,3 +109,13 @@ def read_json_file(file_path):
 def dump_json_to_file(json_data, file_path):
     with open(file_path, "w+", encoding="utf-8") as f:
         json.dump(json_data, f, indent=4, ensure_ascii=False)
+
+
+def get_autocomplete_terms(text, options):
+    """
+    Return a list of auto complete terms based on the prefix text and
+    a list of options
+    :return: a list of auto complete terms that will be displayed
+    """
+    text = text.lower()
+    return [option for option in options if options.startswith(text)]
