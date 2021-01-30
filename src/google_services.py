@@ -22,8 +22,7 @@ class GoogleClient:
     def analyze_sentiment(self):
         payload = open(REQUEST_FILE, "rb")
         headers = {'content-type': 'application/json'}
-        response = requests.post(GOOGLE_LANGUAGE_API.format("analyzeSentiment", self.key),
-                                 data=payload, headers=headers)
+        response = requests.post(GOOGLE_LANGUAGE_API.format(self.key), data=payload, headers=headers)
         return response.json()
 
 

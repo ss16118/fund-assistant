@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from fund import Fund
 from google_services import GoogleServices
+from network_test import network_test
 from text_extractor import HTMLTextExtractor
 from utils import *
 try:
@@ -500,6 +501,7 @@ Performs actions based on the arguments given:
 
 
 if __name__ == '__main__':
+    network_test()
     try:
         logger.log("Fund assistant started")
         FundAssistant().cmdloop()
