@@ -43,7 +43,7 @@ class InfoLogger:
         title, url = search_result
         data = read_json_file(self.article_log)
         if data.get(stock_name) is None:
-            data[stock_name] = {}
+            data[stock_name] = dict()
         data[stock_name][url] = dict(
             title=title,
             content=content
@@ -51,10 +51,31 @@ class InfoLogger:
         dump_json_to_file(data, self.article_log)
         self.log("Saved content of article {} to article.log.json. ({})".format(title, stock_name))
 
+    def get_all_articles(self):
+        """
+        Return all the articles in articles.log.json in the following format:
+        [(index, stock_name, title, url)]
+        """
+        data = read_json_file(self.article_log)
+        index = 1
+        articles = []
+        for stock_name in data.keys():
+            for url, article in data[stock_name].items():
+                articles.append((index, stock_name, article["title"], url))
+                index += 1
+        return articles
+
+    def get_cached_stock_names(self):
+        """
+        Return all the names of the stocks to which the articles are related.
+        """
+        data = read_json_file(self.article_log)
+        return list(data.keys())
+
     def search_article_content(self, url):
         """
-        Return the content of the article that has been extracted and saved in articles.log.json.
-        Return None if there is no entry cached.
+        Return the title and content of the article that has been extracted and saved in articles.log.json
+        in a tuple. Return None if there is no entry cached.
         """
         data = read_json_file(self.article_log)
         try:

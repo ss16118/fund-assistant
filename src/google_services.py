@@ -32,13 +32,13 @@ class GoogleServices:
         self.client = GoogleClient()
         logger.log("Google services initialized successfully")
 
-    def google_search(self, query, num_result):
+    def google_search(self, query, num_result, date_range):
         """
         Returns a list of search results given the query.
         Each element in the list includes both the title
         as well as the url of the result.
         """
-        return search(query, num_result)
+        return search(query, num_result, date_range)
 
     def analyze_text(self):
         reply = self.client.analyze_sentiment()
@@ -80,7 +80,7 @@ def convert_unicode(text):
     return s
 
 
-def download(query, num_results):
+def download(query, num_results, date_range):
     """
     downloads HTML after google search
     """
@@ -88,7 +88,7 @@ def download(query, num_results):
     name = quote(query)
 
     name = name.replace(' ', '+')
-    url = 'http://www.google.com/search?q={}&tbs=qdr:{}&tbm=nws'.format(name, TIME_PERIOD)
+    url = 'http://www.google.com/search?q={}&tbs=qdr:{}&tbm=nws'.format(name, date_range)
     if num_results != 10:
         url += '&num=' + str(num_results)  # adding this param might hint Google towards a bot
     # req = request.get(url)
@@ -104,12 +104,12 @@ def download(query, num_results):
     return data
 
 
-def search(query, num_results=10):
+def search(query, num_results=10, date_range="w"):
     """
     searches google for :query and returns a list of tuples
     of the format (name, url)
     """
-    data = download(query, num_results)
+    data = download(query, num_results, date_range)
     results = re.findall(r'<div class=\"\w+\"><a href=\"/url?.*?\">.*?</div>', data, re.IGNORECASE)
     if results is None or len(results) == 0:
         print('No results where found. Did the rate limit exceed?')

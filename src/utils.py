@@ -2,6 +2,7 @@ import json
 import re
 
 import chardet
+
 from constants import *
 from prettytable import PrettyTable
 import matplotlib.pyplot as plt
@@ -118,4 +119,4 @@ def get_autocomplete_terms(text, options):
     :return: a list of auto complete terms that will be displayed
     """
     text = text.lower()
-    return [option for option in options if options.startswith(text)]
+    return [option for option in options if option.startswith(text)]

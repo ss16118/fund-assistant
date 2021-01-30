@@ -2,9 +2,11 @@ import cmd
 import os
 import traceback
 from datetime import datetime
+from enum import Enum
 from functools import wraps
 
-from config import NUM_RESULTS
+from tqdm import tqdm
+
 from fund import Fund
 from google_services import GoogleServices
 from text_extractor import HTMLTextExtractor
@@ -23,6 +25,14 @@ shorthands = dict(
 )
 
 
+class DateRange(Enum):
+    h = 'Past hour'
+    d = 'Past day'
+    w = 'Past week'
+    m = 'Past month'
+    y = 'Past year'
+
+
 class FundAssistant(Cmd):
     """
     Interactive shell
@@ -37,6 +47,12 @@ class FundAssistant(Cmd):
         self.text_extractor = HTMLTextExtractor()
         self.analysis_statistics = None
         self.prediction_contribution = None
+        # Parameters used for stock analysis
+        self.analysis_config = dict(
+            num_results=10,
+            date_range=DateRange.w,
+            verbose=True
+        )
 
     # ==================== Custom decorators ====================
     def _requires_fund_obj(func):
@@ -49,10 +65,21 @@ class FundAssistant(Cmd):
 
         return inner
 
+    # ==================== Private helper functions ====================
+    def _show_analysis_params(self):
+        logger.log("num_results: {}".format(self.analysis_config["num_results"]), quiet=False)
+        logger.log("date_range : {}".format(self.analysis_config["date_range"].value), quiet=False)
+        logger.log("verbose    : {}".format(self.analysis_config["verbose"]), quiet=False)
+
+    # ==================== Base class methods overrides ====================
     def parseline(self, line):
-        logger.log("Executing command '{}'...".format(line))
+        if line != "":
+            logger.log("Executing command '{}'...".format(line))
         ret = cmd.Cmd.parseline(self, line)
         return ret
+
+    def emptyline(self):
+        pass
 
     # ==================== Interactive commands ====================
     def do_set(self, fund_code):
@@ -77,7 +104,7 @@ Usage: fund <fund_code>"""
 
     @_requires_fund_obj
     def do_fund(self, arg):
-        """Performs actions based on the argument given:
+        """Performs actions based on the arguments given:
 > fund info      : prints all information on the current fund
 > fund code      : prints the fund code
 > fund name      : prints the name of the current fund
@@ -156,7 +183,7 @@ Usage: fund <fund_code>"""
 
     @_requires_fund_obj
     def do_plot(self, arg):
-        """Performs actions based on the argument given:
+        """Performs actions based on the arguments given:
 > plot <options>      : plots the any combination of the three metrics nav, cnv, and dy for the current fund
                         in the past month. Note that metrics must be separated with spaces.
                         i.e. 'plot nav', 'plot nav cnv', 'plot nav cnv dy'
@@ -188,21 +215,92 @@ Usage: fund <fund_code>"""
         else:
             graph_historical_data(self.fund_obj.get_historical_data(list(shorthands.values()), months), metrics_to_plot)
 
+    def do_param(self, arg):
+        """Modifies the parameters used for predicting the value of stock. The parameters are as follows:
+num_results: number of results retrieved from a single Google search query on the stock. [Default: 10]
+date_range : date range of the Google query, has the the following options [Default: 'w']:
+             h: past hour,
+             d: past day,
+             w: past week,
+             m: past month,
+             y: past year
+verbose    : if set set to True, detailed messages will be printed out during news article retrieval. [Default: True]
+
+Performs actions based on the arguments given:
+> param show          : displays the values of the parameters in use
+> param n <int>       : sets the num_results parameter to <int>
+> param d <date_range>: sets the date_range parameter to be <date_range>. <date_range> can only be one of
+                        letters in the list ['h', 'd', 'w', 'm', 'y']
+> param v             : toggles the value of the verbose parameter. If verbose is True, it will set to
+                        False after this command is executed, and vice versa."""
+        args = arg.split()
+
+        def show_params():
+            logger.log("Analysis parameters (use 'help param' to see what each parameter does):", quiet=False)
+            self._show_analysis_params()
+
+        def set_num_results():
+            try:
+                new_num_results = int(args[1])
+                if new_num_results == 0:
+                    raise ValueError
+                self.analysis_config["num_results"] = new_num_results
+                logger.log("Parameter {} successfully set to '{}'".format("num_results", new_num_results), quiet=False)
+            except IndexError:
+                logger.log("There must another argument following 'n'", "error", False)
+            except ValueError:
+                logger.log("The second argument given must be an integer greater than 0.", "error", False)
+
+        def set_date_range():
+            try:
+                self.analysis_config["date_range"] = DateRange[args[1]]
+                logger.log("Parameter {} successfully set to '{}'".format("date_range", DateRange[args[1]].value),
+                           quiet=False)
+            except IndexError:
+                logger.log("There must another argument following 'd'", "error", False)
+            except KeyError:
+                logger.log("The second argument can only be one of the letters from the list {}".format(
+                    [date_range.name for date_range in DateRange]
+                ), "error", False)
+
+        def toggle_verbose():
+            self.analysis_config["verbose"] = not self.analysis_config["verbose"]
+            logger.log("Parameter {} successfully set to '{}'".format("verbose", self.analysis_config["verbose"]),
+                       quiet=False)
+
+        actions = dict(
+            show=show_params,
+            n=set_num_results,
+            d=set_date_range,
+            v=toggle_verbose
+        )
+        try:
+            parameter = args[0]
+            actions[parameter]()
+        except KeyError:
+            logger.log("Command 'param {}' not supported".format(arg), "error", False)
+
     def do_predict(self, arg):
-        """Performs actions based on the argument given:
+        """Predicts the trend of the values of stocks based on news articles found on Google and
+sentiment analysis of the content of the articles. For the aggregate analysis, a number between
+-1 and 1 will be given. The greater the value, the more likely for the net asset value of the
+fund to increase. If the number is less than 0, the net asset value of the fund is likely to
+drop based on the prediction.
+Performs actions based on the argument given:
 > predict all         : performs an aggregate analysis to predict the trend of the net asset value of the fund
-> predict <stock_code>: predict the trend of the value of the stock given by <stock_code>
-> predict <stock_name>: predict the trend of the value of the stock given by <stock_name>"""
+> predict <stock_code>: predicts the trend of the value of the stock given by <stock_code>
+> predict <stock_name>: predicts the trend of the value of the stock given by <stock_name>"""
         self.analysis_statistics = dict(
             crawled_links=0,
             failed_links=[]
         )
-
-        logger.log("Executing command 'predict {}'...".format(arg))
+        logger.log("Analysis will be run with the following parameters:", quiet=False)
+        self._show_analysis_params()
+        quiet = not self.analysis_config["verbose"]
         if arg == "all":
             prediction = 0
             for stock in self.fund_obj.stocks:
-                sentiment_score = self._run_analysis(stock["name"])
+                sentiment_score = self._run_analysis(stock["name"], quiet)
                 weighted_score = sentiment_score * stock["position_ratio"]
                 self.prediction_contribution[stock["code"]] = dict(
                     name=stock["name"],
@@ -211,7 +309,7 @@ Usage: fund <fund_code>"""
                     weighted_score=weighted_score
                 )
                 logger.log("Weighted sentiment score of {:.3f} added to the current prediction".format(weighted_score),
-                           quiet=False)
+                           quiet=quiet)
                 prediction += weighted_score
             self.fund_obj.overall_prediction = prediction / 100
             logger.log("Prediction for {} ({}): {:.5f}"
@@ -226,10 +324,10 @@ Usage: fund <fund_code>"""
                 if stock["name"] == arg or stock["code"] == arg:
                     name = stock["name"]
             if name is not None:
-                self._run_analysis(name)
+                self._run_analysis(name, quiet)
             else:
                 logger.log("Stock {} is not held in the current fund.\n"
-                           "Use 'fund stocks' to see stocks that can be analyzed.", "error", False)
+                           "Use 'fund stocks' to see stocks that can be analyzed.".format(name), "error", False)
         logger.log("Statistics:")
         logger.log("Total number links crawled: {}".format(self.analysis_statistics["crawled_links"]), quiet=False)
         failed_links_num = len(self.analysis_statistics["failed_links"])
@@ -237,7 +335,7 @@ Usage: fund <fund_code>"""
         for url, exception in self.analysis_statistics["failed_links"]:
             logger.log("{}: {}".format(url, exception), quiet=False)
 
-    def _run_analysis(self, stock_name):
+    def _run_analysis(self, stock_name, quiet):
         """
         Performs the operation of gathering news links from Google, extracting
         text from news articles, then sending it to Google natural language API.
@@ -245,15 +343,22 @@ Usage: fund <fund_code>"""
         :return: the sentiment score returned by Google API
         """
         score = 0
-        logger.log("Searching news articles on Google on {}".format(stock_name), quiet=False)
+        logger.log("Searching news articles on Google on {}".format(stock_name), quiet=quiet)
         clear_payload()
         try:
-            results = self.google_service.google_search(stock_name, NUM_RESULTS)
+            results = self.google_service.google_search(
+                stock_name,
+                self.analysis_config["num_results"],
+                self.analysis_config["date_range"].name
+            )
             logger.log("Search results retrieved successfully")
-            for i, result in enumerate(results):
-                logger.log("{}. {}: {}".format(i + 1, *result), quiet=False)
-                url = result[1]
-                title = result[0]
+
+            iterator = tqdm(enumerate(results), total=len(results), desc=stock_name, ncols=100) \
+                if quiet else enumerate(results)
+
+            for i, result in iterator:
+                logger.log("{}. {}: {}".format(i + 1, *result), quiet=quiet)
+                title, url = result
                 try:
                     content_lines = self.text_extractor.extract_essential_text(url)
                     content_lines = [title] + content_lines
@@ -276,7 +381,7 @@ Usage: fund <fund_code>"""
                            .format(stock_name, exception), "error", False)
         except Exception as exception:
             logger.log("Failed to fetch news articles on {} from Google due to: {}".format(stock_name, exception),
-                       "error", False)
+                       "error", quiet)
         finally:
             return score
 
@@ -294,8 +399,65 @@ Usage: fund <fund_code>"""
             return completions
         return ""
 
+    def do_article(self, arg):
+        """In order for a news articles to be cached, 'predict' command needs to be run first.
+Performs actions based on the arguments given:
+> article view <int>       : print out the content of the article which has the index specified by <int>
+> article list all         : lists the title and url of all the cached articles during analysis
+> article list <stock_name>: lists the title and url of cached articles on the stock specified by <stock_name>
+> article clear            : clears all the cached news articles"""
+        args = arg.split()
+
+        def view_article():
+            try:
+                index = int(args[1])
+                if index == 0:
+                    raise ValueError
+                _, stock_name, title, url = logger.get_all_articles()[index - 1]
+                logger.log("{}\n{}\n{}".format(stock_name, url, logger.search_article_content(url)),
+                           quiet=False)
+            except IndexError:
+                logger.log("Please enter the index of the article which you wish to view", "error", False)
+            except ValueError:
+                logger.log("The index of the article must be an integer greater than 0.", "error", False)
+
+        def list_articles():
+            try:
+                arg2 = args[1]
+                stock_names = logger.get_cached_stock_names()
+                if arg2 != "all" and arg2 not in stock_names:
+                    logger.log("There is no cached news articles on {}".format(arg2), "error", False)
+                    return
+                stock_names = stock_names if arg2 == "all" else [arg2]
+                all_articles = logger.get_all_articles()
+                for name in stock_names:
+                    logger.log("Stock: {}".format(name), quiet=False)
+                    for i, _, title, url in filter(lambda t: t[1] == name, all_articles):
+                        logger.log("{}. {}: {}".format(i, title, url), quiet=False)
+            except IndexError:
+                logger.log("Please enter a second argument for 'article list' command", "error", False)
+
+        actions = dict(
+            view=view_article,
+            list=list_articles,
+            clear=logger.clear_article_log
+        )
+        try:
+            command = args[0]
+            actions[command]()
+        except KeyError:
+            logger.log("Command 'article {}' not supported".format(arg), "error", False)
+
+    def complete_article(self, text, line, begidx, endidx):
+        args = line.split()
+        if text == "" and args[1] == "list":
+            return logger.get_cached_stock_names()
+        else:
+            return get_autocomplete_terms(text, logger.get_cached_stock_names())
+
+
     def do_log(self, arg):
-        """Performs actions based on the argument given:
+        """Performs actions based on the arguments given:
 > log clear      : clears all the log entries
 > log print all  : prints all the content in the log (use with caution as the size of the log might be large)
 > log print <int>: prints the last <int> of lines of the log file."""
