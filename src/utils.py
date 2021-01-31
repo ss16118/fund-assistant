@@ -1,4 +1,5 @@
 import json
+import os
 import re
 
 import chardet
@@ -120,3 +121,10 @@ def get_autocomplete_terms(text, options):
     """
     text = text.lower()
     return [option for option in options if option.startswith(text)]
+
+
+def clear_console():
+    """
+    Clears the console screen
+    """
+    os.system('cls' if os.name == 'nt' else 'clear')

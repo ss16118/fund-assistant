@@ -1,7 +1,4 @@
 import cmd
-import os
-import traceback
-from datetime import datetime
 from enum import Enum
 from functools import wraps
 
@@ -487,7 +484,7 @@ Performs actions based on the arguments given:
     def do_clear(self, _):
         """Clears the console"""
         logger.log("Console cleared")
-        os.system('cls' if os.name == 'nt' else 'clear')
+        clear_console()
 
     def do_exit(self, _):
         """Exit the application"""

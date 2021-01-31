@@ -7,7 +7,6 @@ from urllib.parse import quote, unquote
 
 import requests
 
-from config import *
 from constants import *
 from logger import logger
 

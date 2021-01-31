@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from logger import logger
 from utils import *
 import requests
-import dateutil.relativedelta as datediff
+import dateutil.relativedelta as date_diff
 
 var_names = dict(
     name="fS_name",
@@ -110,7 +110,7 @@ class Fund:
     def get_historical_data(self, column_names, months):
         data = self.historical_data
         data = data[["date", *column_names]]
-        date = datetime.today() - datediff.relativedelta(months=months)
+        date = datetime.today() - date_diff.relativedelta(months=months)
         data = data[data["date"] >= date]
         return data.iloc[::-1]
 
