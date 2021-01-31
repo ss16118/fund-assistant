@@ -60,7 +60,15 @@ class FundAssistant(Cmd):
                 logger.log("Fund has not been set yet. Use 'set <fund_code>' to specify the fund.", "warning", False)
             else:
                 return func(self, *args, **kwargs)
+        return inner
 
+    def _requires_google_api_key(func):
+        @wraps(func)
+        def inner(self, *args, **kwargs):
+            if self.google_service.client.key is None:
+                logger.log("'predict' command cannot be executed until an API_KEY is present", "warning", False)
+            else:
+                return func(self, *args, **kwargs)
         return inner
 
     # ==================== Private helper functions ====================
@@ -222,7 +230,8 @@ date_range : date range of the Google query, has the the following options [Defa
              w: past week,
              m: past month,
              y: past year
-verbose    : if set set to True, detailed messages will be printed out during news article retrieval. [Default: True]
+verbose    : if set set to True, detailed messages will be printed out during news article retrieval. If
+             it is False, a progress bar will be displayed instead. [Default: True]
 
 Performs actions based on the arguments given:
 > param show          : displays the values of the parameters in use
@@ -278,6 +287,8 @@ Performs actions based on the arguments given:
         except KeyError:
             logger.log("Command 'param {}' not supported".format(arg), "error", False)
 
+    @_requires_fund_obj
+    @_requires_google_api_key
     def do_predict(self, arg):
         """Predicts the trend of the values of stocks based on news articles found on Google and
 sentiment analysis of the content of the articles. For the aggregate analysis, a number between
@@ -453,12 +464,11 @@ Performs actions based on the arguments given:
         else:
             return get_autocomplete_terms(text, logger.get_cached_stock_names())
 
-
     def do_log(self, arg):
         """Performs actions based on the arguments given:
 > log clear      : clears all the log entries
 > log print all  : prints all the content in the log (use with caution as the size of the log might be large)
-> log print <int>: prints the last <int> of lines of the log file."""
+> log print <int>: prints the last <int> of lines of the log file"""
         args = arg.split()
 
         def print_content():
@@ -495,7 +505,7 @@ Performs actions based on the arguments given:
         return True
 
     _requires_fund_obj = staticmethod(_requires_fund_obj)
-
+    _requires_google_api_key = staticmethod(_requires_google_api_key)
 
 if __name__ == '__main__':
     network_test()

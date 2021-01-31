@@ -59,20 +59,20 @@ def network_test():
             headers = {'content-type': 'application/json'}
             response = requests.post(GOOGLE_LANGUAGE_API.format(api_key), data=payload, headers=headers)
             if not str(response.status_code).startswith("2"):
-                print("Failed to connect to Google natural language api")
-                return False
+                raise ConnectionError("Failed to connect to Google natural language api")
             response_time += response.elapsed.total_seconds()
 
             response = requests.get("http://www.google.com/search?q=test")
             if not str(response.status_code).startswith("2"):
-                print("Failed to fetch query results from Google")
+                raise ConnectionError("Failed to fetch query results from Google")
             response_time += response.elapsed.total_seconds()
             print("Average time delay: {:.3f}s".format(response_time / 2))
             return True
-        except Exception as exception:
-            print("Failed to connect to Google services, please check network connectivity: {}".format(exception))
         except KeyError:
-            print("Please add your google API key to the list of environment variables")
+            print("Please add your google API key to the list of environment variables, "
+                  "'predict' functionality is disabled...")
+        except Exception as exception:
+            print("Failed to connect to Google services: {}".format(exception))
         return False
 
     if not all([can_fetch_fund_data(), can_fetch_news_articles(), can_connect_to_google_services()]):

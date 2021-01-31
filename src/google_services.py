@@ -13,10 +13,11 @@ from logger import logger
 
 class GoogleClient:
     def __init__(self):
-        if os.environ["API_KEY"] is None:
+        self.key = None
+        try:
+            self.key = os.environ["API_KEY"]
+        except KeyError:
             print("API_KEY for google services needs to be present!")
-            exit(-1)
-        self.key = os.environ["API_KEY"]
 
     def analyze_sentiment(self):
         payload = open(REQUEST_FILE, "rb")
